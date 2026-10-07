@@ -1,8 +1,0 @@
-# GLM-5.2 — Argolink
-
-- Model: glm-5.2
-- Intent: repeatable inference benchmark harness
-- Model page: https://argolink.io/gh-glm-5-2-benchmark-harness
-- API docs: https://argolink.io/gh-unified-api-docs
-- Examples: examples/request.sh, examples/client.py
-- Contract: docs/model-contract.md
