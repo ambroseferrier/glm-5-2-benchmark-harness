@@ -1,25 +1,59 @@
-# GLM 5.2 and 5.3 benchmark harness
+# GLM 5.2 / 5.3 benchmark harness
 
-This harness defines a CSV schema and a safe starting point for measuring time to first token, throughput, success rate, and estimated cost across providers. **[ArgoLink](https://argolink.io/gh-glm-5-2-benchmark-harness) is a possible adapter, not a published benchmark result.** The repository contains no fabricated measurements. Last checked: 2026-10-07.
+An offline-first result contract for measuring GLM requests across providers. It records time to first token (TTFT), total latency, generation throughput, success rate, and an estimated request cost in a CSV that can be reviewed or plotted later. The repository is an independent community project and is not affiliated with Zhipu, Vercel, or any provider.
 
-## What is measured
+## What is included
 
-An adapter should record provider, exact model ID, request start, first received token time, end time, input/output usage, HTTP status, and error class. Derive TTFT from start to first token, throughput from output tokens divided by generation seconds, success from a complete response, and cost from the dated price table. Keep streaming and non-streaming runs separate. Do not compare a cached request to a cold request without labeling it.
+- `bench/models.json` — the model IDs, endpoint family, reasoning options, effective ArgoLink rates, and dated source links checked on 2026-10-07.
+- `bench/run.py` — validation, derived metrics, cost estimation, CSV writing, and summary statistics. It never sends a request.
+- `tests/test_bench.py` — deterministic fixtures for the schema, percentile calculation, cached-input pricing, and validation failures.
 
-bench/run.py only creates the column contract and prints that no live measurements were run. It makes no request and cannot be used as a benchmark until an adapter is intentionally added. A local fake stream is the right first test; a production run needs a model, prompt set, concurrency level, region, date, and provider terms.
+The catalog facts used here are the live ArgoLink catalog at [GET /v1/models](https://argolink.io/v1/models) and the [GLM-5.2](https://argolink.io/en/models/glm-5-2) and [GLM-5.3](https://argolink.io/en/models/glm-5-3) model pages. Recheck those pages before publishing a new run; IDs, prices, limits, and reasoning options can change.
 
-## CSV protocol
+## Current model boundary
 
-Use one row per request. Preserve the raw response ID privately, but put a stable run ID in the CSV. Include prompt-set version, temperature or sampling settings, reasoning effort, input tokens, output tokens, TTFT milliseconds, total latency, throughput, status, and error class. A timeout after the provider may have accepted a request is not a safe reason to replay it. Video and image requests need different units and should not enter this token table.
+| Model | API family | Context / max output | Reasoning options | Effective rates per 1M tokens |
+| --- | --- | ---: | --- | ---: |
+| `glm-5.2` | Chat Completions (`/v1/chat/completions`) | 1,000,000 / 128,000 | `high`, `max`; `reasoning_effort: none` disables reasoning | $1.12 input / $3.52 output / $0.208 cached input |
+| `glm-5.3` | Chat Completions (`/v1/chat/completions`) | 1,000,000 / 128,000 | `low`, `high`, `max`; default `max`; `medium` aliases to `high`, `xhigh` to `max` | $1.12 input / $3.52 output / $0.208 cached input |
 
-## Result policy
+Rates are estimates for accounting, not a promise of a provider invoice. Keep the catalog date beside every report. Do not claim a latency, throughput, success rate, or ranking until it has been measured and the prompt set, region, concurrency, warm-up policy, and exclusions are published with it.
 
-README says “results not published” until a reproducible run is attached. Do not add an average without sample count, variance, warm-up policy, and exclusions. Token usage can be absent or provider-specific; record unknown rather than zero. If an API reports server latency, label it separately from wall-clock client latency.
+## CSV contract
 
-## Model and price boundary
+There is one row per request attempt. `run_id`, provider, exact model ID, prompt-set version, attempt number, concurrency, reasoning effort, and `cache_state` make samples comparable. Timestamps are monotonic seconds captured by the adapter. `ttft_ms` is start to first received token; `total_ms` is start to end; `throughput_tokens_per_sec` is output tokens divided by the time after the first token. Unknown usage is blank, never silently changed to zero. A timeout is an outcome, not permission to replay a request without recording the new attempt.
 
-Read the current catalog for GLM 5.2/5.3 IDs, reasoning support, context, and effective rates. This page does not assert a third-party official rate. ArgoLink's base is https://argolink.io/v1 and the key should remain in a neutral environment variable. A benchmark may be technically correct while a different account tier or queue changes the observed result.
+Required columns are:
 
-## Tests and FAQ
+```text
+run_id, provider, model, prompt_set, attempt, concurrency,
+reasoning_effort, cache_state, started_at, first_token_at, ended_at,
+input_tokens, cached_input_tokens, output_tokens, ttft_ms, total_ms,
+throughput_tokens_per_sec, estimated_usd, http_status, status, error_class
+```
 
-python3 -m unittest discover -s tests checks row shape offline. **Can I quote the sample output?** No, there is none. **Should I test one prompt?** Use a fixed prompt set and multiple repetitions. **Why separate TTFT and throughput?** They measure different user experiences. **Can I include retries?** Record each attempt and the final outcome, never hide it in an average.
+`status` is one of `success`, `error`, `timeout`, or `cancelled`. Streaming and non-streaming runs should use separate prompt-set labels. Image and video jobs use different units and do not belong in this token benchmark.
+
+## Offline usage
+
+The default command writes an empty, explicitly non-live CSV:
+
+```bash
+python3 -m bench.run --output /tmp/glm-results.csv
+```
+
+To summarize validated rows produced by your own adapter, pass a JSON array. The adapter is intentionally outside this repository so credentials and billable traffic cannot be triggered accidentally:
+
+```bash
+python3 -m bench.run --input /path/to/validated-rows.json --output /tmp/glm-results.csv
+```
+
+Use the ArgoLink base URL `https://argolink.io/v1` and a secret environment variable in a separate adapter. Never commit a key. A production adapter must set a descriptive `User-Agent`, enforce timeouts, record each retry as a separate attempt, and stop before a request can exceed the selected budget.
+
+## Development
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+No live measurements are published in this repository yet. The first report should include the exact commit, catalog date, prompt-set file, model settings, concurrency, region, raw sample count, and the generated CSV checksum.

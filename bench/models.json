@@ -1,0 +1,8 @@
+{
+  "checked": "2026-10-07",
+  "source": "https://argolink.io/v1/models",
+  "models": {
+    "glm-5.2": {"endpoint": "/v1/chat/completions", "reasoning": ["high", "max"], "input_per_million": 1.12, "output_per_million": 3.52, "cached_per_million": 0.208, "source": "https://argolink.io/en/models/glm-5-2"},
+    "glm-5.3": {"endpoint": "/v1/chat/completions", "reasoning": ["low", "high", "max"], "input_per_million": 1.12, "output_per_million": 3.52, "cached_per_million": 0.208, "source": "https://argolink.io/en/models/glm-5-3"}
+  }
+}
